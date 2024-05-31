@@ -1,0 +1,89 @@
+const int sensorPin = 2; // Pin D2 para LECTURA el sensor infrarrojo
+const int relayPin1 = 5; // Pin D5 para el primer relé DE 6 CANALES
+const int relayPin2 = 6; // Pin D6 para el segundo relé DE 6 CANALS
+
+unsigned long startTime = 0;
+bool isCounting = false;
+bool systemDisabled = false;
+unsigned long changeSignalTime = 0;
+bool signalChanged = false;
+
+void setup() {
+  pinMode(sensorPin, INPUT);      
+  pinMode(relayPin1, OUTPUT);      
+  pinMode(relayPin2, OUTPUT);    
+  
+  // Inicializar los relés en apagado (asumiendo que LOW los apaga)
+  digitalWrite(relayPin1, LOW);
+  digitalWrite(relayPin2, LOW);
+  
+  Serial.begin(9600);              // Inicializar la comunicación serial
+}
+
+void loop() {
+  int sensorValue = digitalRead(sensorPin); // Leer el valor del sensor infrarrojo
+
+  if (!systemDisabled) {
+    if (sensorValue == LOW) {
+      if (!isCounting) {
+        // Iniciar el conteo cuando el sensor detecta 0 por primera vez
+        startTime = millis();
+        isCounting = true;
+      }
+
+      // Encender los relés
+      digitalWrite(relayPin1, HIGH);
+      digitalWrite(relayPin2, HIGH);
+
+      // Si el valor es 0 y ha pasado más de 10 segundos, ACTIVAR EL BLOQUEO DE SENSORES
+      if (millis() - startTime > 10000) {
+        systemDisabled = true;
+        // Apagar los relés
+        digitalWrite(relayPin1, LOW);
+        digitalWrite(relayPin2, LOW);
+      }
+    } else {
+      if (isCounting) {
+        // Apagar los relés cuando el sensor lee 1 y registrar el tiempo del cambio de señal
+        digitalWrite(relayPin1, LOW);
+        digitalWrite(relayPin2, LOW);
+        changeSignalTime = millis();
+        signalChanged = true;
+        isCounting = false; // Reiniciar el contador
+      }
+    }
+  } else {
+    // Si el sistema está desactivado, esperar un cambio de señal CERO A UNO
+    if (sensorValue == HIGH) {
+      systemDisabled = false;
+      isCounting = false;
+      signalChanged = false;
+    }
+  }
+
+  // Mantener los relés encendidos por 3 segundos después de un cambio de CERO A UNO
+  if (signalChanged && (millis() - changeSignalTime < 3000)) {
+    digitalWrite(relayPin1, HIGH);
+    digitalWrite(relayPin2, HIGH);
+  } else if (signalChanged) {
+    digitalWrite(relayPin1, LOW);
+    digitalWrite(relayPin2, LOW);
+    signalChanged = false;
+  }
+
+  // Imprimir el valor del sensor y el tiempo transcurrido en el Monitor Serial
+  Serial.print("Sensor Value: ");
+  Serial.print(sensorValue);
+  Serial.print(" | Time Elapsed: ");
+  if (isCounting) {
+    Serial.print(millis() - startTime);
+  } else {
+    Serial.print("N/A");
+  }
+  Serial.print(" | System Disabled: ");
+  Serial.print(systemDisabled ? "YES" : "NO");
+  Serial.print(" | Signal Changed: ");
+  Serial.println(signalChanged ? "YES" : "NO");
+
+  delay(100); // Pequeña pausa
+}
