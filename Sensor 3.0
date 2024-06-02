@@ -1,0 +1,67 @@
+// Definición de pines para circuito de paro y seguridad del operario
+const int pinSensorIR = 2;
+const int pinRelay1 = 5;
+const int pinRelay2 = 6;
+
+// Variables para gestionar el tiempo de los componentes
+unsigned long tiempoInicio = 0;
+bool relaysActivados = false;
+bool temporizadorIniciado = false;
+bool relaysBloqueados = false;
+
+void setup() {
+  // Configuración de pines ya sea como entrada o salida
+  pinMode(pinSensorIR, INPUT);
+  pinMode(pinRelay1, OUTPUT);
+  pinMode(pinRelay2, OUTPUT);
+
+  // Inicializar relés en estado apagado o encendido
+  digitalWrite(pinRelay1, LOW); 
+  digitalWrite(pinRelay2, LOW);
+
+  // Iniciar comunicación serie para depuración en lectura del arduino nano
+  Serial.begin(9600);
+}
+
+void loop() {
+  // Leer el estado del sensor infrarojos
+  int estadoSensor = digitalRead(pinSensorIR);
+
+  if (estadoSensor == LOW) {
+    if (!relaysActivados && !relaysBloqueados) {
+      // Activar relés si no están activados ya y no están bloqueados en el tiempo determinado y evitar tapar el sensor por el operario
+      digitalWrite(pinRelay1, HIGH);
+      digitalWrite(pinRelay2, HIGH);
+      relaysActivados = true;
+      temporizadorIniciado = true;
+      tiempoInicio = millis(); // Registrar el tiempo de activación en milesimas
+      Serial.println("Relés activados");
+    } else if (temporizadorIniciado && millis() - tiempoInicio >= 10000) {
+      // Si han pasado 10 segundos desde la activación
+      digitalWrite(pinRelay1, LOW);
+      digitalWrite(pinRelay2, LOW);
+      relaysActivados = false;
+      temporizadorIniciado = false;
+      relaysBloqueados = true; // Bloquear los relés para no poder seguir costurando
+      Serial.println("Relés desactivados y bloqueados tras 10 segundos");
+    }
+  } else {
+    // Si el sensor no detecta (estado HIGH) no activa devuelta por motivos de seguridad
+    if (relaysActivados && millis() - tiempoInicio >= 3000) {
+      // Desactivar relés si han pasado al menos 4 segundos desde la activación
+      digitalWrite(pinRelay1, LOW);
+      digitalWrite(pinRelay2, LOW);
+      relaysActivados = false;
+      Serial.println("Relés desactivados tras 4 segundos");
+    }
+    // Reiniciar temporizador y desbloquear relés si la señal vuelve a alta
+    temporizadorIniciado = true;
+    if (relaysBloqueados) {
+      relaysBloqueados = false;
+      Serial.println("Relés desbloqueados");
+    }
+  }
+
+  delay(100); // Pequeña espera para evitar lecturas erróneas y evitar margenes de eroores
+}
+// Pruebas Osmar Silva,Codigo Mario Vasquez, 
